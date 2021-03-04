@@ -20,8 +20,10 @@
 package org.sonar.java.checks.helpers;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.regex.Pattern;
@@ -89,14 +91,18 @@ public class RegexTreeHelper {
   }
 
   public static boolean canReachWithoutConsumingInput(AutomatonState start, AutomatonState goal) {
-    return canReachWithoutConsumingInput(start, goal, new HashSet<>());
+    return canReachWithoutConsumingInput(start, goal, false, new HashSet<>());
   }
 
-  private static boolean canReachWithoutConsumingInput(AutomatonState start, AutomatonState goal, Set<AutomatonState> visited) {
+  public static boolean canReachWithoutConsumingInputOrGoingThroughBoundaries(AutomatonState start, AutomatonState goal) {
+    return canReachWithoutConsumingInput(start, goal, true, new HashSet<>());
+  }
+
+  private static boolean canReachWithoutConsumingInput(AutomatonState start, AutomatonState goal, boolean stopAtBoundaries, Set<AutomatonState> visited) {
     if (start == goal) {
       return true;
     }
-    if (visited.contains(start)) {
+    if (visited.contains(start) || (stopAtBoundaries && start instanceof BoundaryTree)) {
       return false;
     }
     visited.add(start);
@@ -106,7 +112,7 @@ public class RegexTreeHelper {
       // after the edge won't directly follow what's before the edge. However, we do consider the end-of-lookahead
       // state itself reachable (but not any state behind it), so that we can check whether the end of the lookahead
       // can be reached without input from a given place within the lookahead.
-      if (((transition == EPSILON || transition == NEGATION) && canReachWithoutConsumingInput(successor, goal, visited))
+      if (((transition == EPSILON || transition == NEGATION) && canReachWithoutConsumingInput(successor, goal, stopAtBoundaries, visited))
         || (successor instanceof EndOfLookaroundState && successor == goal)) {
         return true;
       }
@@ -123,23 +129,7 @@ public class RegexTreeHelper {
    * It should be whichever answer does not lead to an issue being reported to avoid false positives.
    */
   public static boolean intersects(SubAutomaton auto1, SubAutomaton auto2, boolean defaultAnswer) {
-    return intersects(auto1, auto2, defaultAnswer, new OrderedStatePairCache<>());
-  }
-
-  private static boolean intersects(SubAutomaton auto1, SubAutomaton auto2, boolean defaultAnswer, OrderedStatePairCache<Boolean> cache) {
-    return computeIfAbsentFromCache(auto1, auto2, defaultAnswer, cache,
-      () -> auto1.anySuccessorMatch(successor -> intersects(successor, auto2, defaultAnswer, cache), false),
-      () -> auto2.anySuccessorMatch(successor -> intersects(auto1, successor, defaultAnswer, cache), false),
-      () -> {
-        SimplifiedRegexCharacterClass characterClass1 = SimplifiedRegexCharacterClass.of(auto1.start);
-        SimplifiedRegexCharacterClass characterClass2 = SimplifiedRegexCharacterClass.of(auto2.start);
-        boolean answer = defaultAnswer;
-        if (characterClass1 != null && characterClass2 != null) {
-          answer = characterClass1.intersects(characterClass2, defaultAnswer) &&
-            auto1.anySuccessorMatch(successor1 -> auto2.anySuccessorMatch(successor2 -> intersects(successor1, successor2, defaultAnswer, cache), true), true);
-        }
-        return answer;
-      });
+    return new CachedIntersectionChecker(defaultAnswer).intersects(auto1, auto2);
   }
 
   /**
@@ -167,7 +157,7 @@ public class RegexTreeHelper {
       });
   }
 
-  private static boolean hasNotSupportedTransitionType(SubAutomaton auto) {
+  private static boolean hasUnsupportedTransitionType(SubAutomaton auto) {
     TransitionType transition = auto.start.incomingTransitionType();
     return transition == LOOKAROUND_BACKTRACKING ||
       transition == NEGATION ||
@@ -192,7 +182,7 @@ public class RegexTreeHelper {
 
   private static boolean computeIfAbsentFromCache(SubAutomaton auto1, SubAutomaton auto2, boolean defaultAnswer, OrderedStatePairCache<Boolean> cache,
     BooleanSupplier evaluateAuto1Successors, BooleanSupplier evaluateAuto2Successors, BooleanSupplier compareAuto1AndAuto2) {
-    if (hasNotSupportedTransitionType(auto1) || hasNotSupportedTransitionType(auto2)) {
+    if (hasUnsupportedTransitionType(auto1) || hasUnsupportedTransitionType(auto2)) {
       return defaultAnswer;
     }
     OrderedStatePair entry = new OrderedStatePair(auto1.start, auto2.start);
@@ -275,6 +265,78 @@ public class RegexTreeHelper {
       }
     }
     return true;
+  }
+
+  /**
+   * Use this class instead of the intersects method if you want to call intersects multiple times using the same cache.
+   */
+  public static class CachedIntersectionChecker {
+    private final boolean defaultAnswer;
+    private final Map<OrderedStatePair, OrderedStatePairCache<Boolean>> caches = new HashMap<>();
+
+    public CachedIntersectionChecker(boolean defaultAnswer) {
+      this.defaultAnswer = defaultAnswer;
+    }
+
+    public void clearCache() {
+      caches.clear();
+    }
+
+    private OrderedStatePairCache<Boolean> getCacheFor(SubAutomaton auto1, SubAutomaton auto2) {
+      OrderedStatePair endPair = new OrderedStatePair(auto1.end, auto2.end);
+      return caches.computeIfAbsent(endPair, key -> new OrderedStatePairCache<>());
+    }
+
+    public boolean intersects(SubAutomaton auto1, SubAutomaton auto2) {
+      return computeIfAbsentFromCache(auto1, auto2, defaultAnswer, getCacheFor(auto1, auto2),
+        () -> auto1.anySuccessorMatch(successor -> intersects(successor, auto2), false),
+        () -> auto2.anySuccessorMatch(successor -> intersects(auto1, successor), false),
+        () -> {
+          SimplifiedRegexCharacterClass characterClass1 = SimplifiedRegexCharacterClass.of(auto1.start);
+          SimplifiedRegexCharacterClass characterClass2 = SimplifiedRegexCharacterClass.of(auto2.start);
+          if (characterClass1 != null && characterClass2 != null) {
+            return characterClass1.intersects(characterClass2, defaultAnswer) &&
+              auto1.anySuccessorMatch(successor1 -> auto2.anySuccessorMatch(successor2 -> intersects(successor1, successor2), true), true);
+          }
+          return defaultAnswer;
+        });
+    }
+  }
+
+  public static class CachedReachabilityChecker {
+    private final boolean defaultAnswer;
+    private final Map<OrderedStatePair, Boolean> cache = new HashMap<>();
+
+    public CachedReachabilityChecker(boolean defaultAnswer) {
+      this.defaultAnswer = defaultAnswer;
+    }
+
+    public void clearCache() {
+      cache.clear();
+    }
+
+    public boolean canReach(AutomatonState start, AutomatonState goal) {
+      if (start == goal) {
+        return true;
+      }
+      OrderedStatePair pair = new OrderedStatePair(start, goal);
+      if (cache.containsKey(pair)) {
+        return cache.get(pair);
+      }
+      if (cache.size() >= OrderedStatePairCache.MAX_CACHE_SIZE) {
+        return defaultAnswer;
+      }
+      cache.put(pair, false);
+      boolean result = false;
+      for (AutomatonState successor : start.successors()) {
+        if (canReach(successor, goal)) {
+          result = true;
+          break;
+        }
+      }
+      cache.put(pair, result);
+      return result;
+    }
   }
 
 }
