@@ -19,10 +19,8 @@
   <description>Java Custom Rules Example for SonarQube</description>
 
   <properties>
-    <!-- Uncomment and replace this versions by your SonarQube version -->
-    <!-- <sonarqube.version>8.7.0.41497</sonarqube.version> -->
-    <!-- Uncomment and replace this version by the version of the SonarJava plugin embedded in your SonarQube version-->
-    <!-- <sonarjava.version>6.13.0.25138</sonarjava.version> -->
+    <sonarqube.version>7.9.6</sonarqube.version>
+    <sonarjava.version>6.3.2.22818</sonarjava.version>
     <!-- Don't forget to update this version -->
     <jacoco.version>0.8.6</jacoco.version>
     <!-- Use UTF-8 for all resources -->
@@ -48,7 +46,7 @@
 
     <!-- TEST sources dependencies -->
     <dependency>
-      <groupId>org.sonarsource.java</groupId>
+     <groupId>org.sonarsource.java</groupId>
       <artifactId>java-checks-testkit</artifactId>
       <version>${sonarjava.version}</version>
       <scope>test</scope>

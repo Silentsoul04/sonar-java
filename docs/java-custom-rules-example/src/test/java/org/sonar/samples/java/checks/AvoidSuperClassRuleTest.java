@@ -20,8 +20,8 @@
 package org.sonar.samples.java.checks;
 
 import org.junit.jupiter.api.Test;
-import org.sonar.java.checks.verifier.FilesUtils;
 import org.sonar.java.checks.verifier.JavaCheckVerifier;
+import org.sonar.samples.java.utils.FilesUtils;
 
 class AvoidSuperClassRuleTest {
 

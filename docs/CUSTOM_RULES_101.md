@@ -5,6 +5,9 @@ You are using SonarQube and its Java Analyzer to analyze your projects, but ther
 
 This document is an introduction to custom rule writing for the SonarQube Java Analyzer. It will cover all the main concepts of static analysis required to understand and develop effective rules, relying on the API provided by the SonarSource Analyzer for Java.
 
+
+FIXME remove configurable POM in profit of different POMs.
+
 ## Content
 
 * [Getting Started](#getting-started)
