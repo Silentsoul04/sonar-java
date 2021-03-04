@@ -511,7 +511,10 @@ Then, grab the jar file `java-custom-rules-example-1.0.0-SNAPSHOT.jar` from the 
 >
 > Before going further, be sure to have the adequate version of the SonarQube Java Analyzer with your SonarQube instance. The dependency over the Java Analyzer of our custom plugin is defined in its `pom`, as seen in the first chapter of this tutorial.
 >
-> If you have a fresh install or do not possess the same version, install the adequate version of the Java Analyzer. The latest version of the Java Analyzer  compatible with your SonarQube instance can be downloaded from your SonarQube marketplace).
+> * If you are using a SonarQube 7.9 LTS version, make sure to update the Java Analyzer to its latest compatible version through the SonarQube marketplace (it should be version version `6.3.2.22818`), and then use this version in this build.
+> * If you are using a SonarQube 8.X, then you won't have the possibility to update the Java Analyzer independently anymore. The versions of the analyzers are now fixed to a given SonarQube version. As examples, SonarQube 8.7 embed version `6.12.0.24852`. You consequently have two things to do:
+>   * Make sure you are using the latest SonarQube release. As soon as a new 8.X version is released, the `X-1` version stops being supported
+>   * If you are using the latest version of SonarQube 8.X already, but the Java Analyzer version shipped with it is actually not the latest one released so far (check the [releases](https://github.com/SonarSource/sonar-java/releases)), then you can decide to manually update the embedded version of the Java Analyzer to its latest release (for instance from `6.12.0.24852` to `6.13.0.25138`, by recovering from [maven-central](https://mvnrepository.com/artifact/org.sonarsource.java/sonar-java-plugin))
 >
 
 Now, (re-)start your SonarQube instance, log as admin and navigate to the ***Rules*** tab.
@@ -520,7 +523,7 @@ From there, under the language section, select "**Java**", and then "**MyCompany
 
 ![Selected rules](resources/rules_selected.png)
 
-Once activated (not sure how? see [quality-profiles](https://docs.sonarqube.org/latest/instance-administration/quality-profiles/)), the only step remaining is to analyse one of your project!
+Once activated (not sure how? see [quality-profiles](https://docs.sonarqube.org/latest/instance-administration/quality-profiles/)), the only step remaining is to analyze one of your project!
 
 When encountering a method returning the same type as its parameter, the issue will now raise issue, as visible in the following picture:
 
